@@ -3,7 +3,7 @@
     "port": 6000,
     "public_key": "fake public key",
     "private_key": "fake private key",
-    "pub oauth2_conf": {
+    "oauth2_conf": {
         "idp1": {
         "client_id": "client id idp1",
         "redirect_uri": "redirect uri idp1",
