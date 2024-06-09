@@ -12,7 +12,7 @@ use axum::{
 use tokio::net::TcpListener;
 use std::net::SocketAddr;
 
-//use crate::callback;
+use crate::callback;
 
 #[derive(Clone)]
 pub struct ServerConfig {
@@ -45,7 +45,7 @@ impl ServerConfig {
         let routes = Router::new()
           .route("/", get(hello))
 //          .route("/verify", post(verify))
-          .route("/callback/:id_provider", get(callback))
+          .route("/callback/:id_provider", get(callback::callback))
           .with_state(server);
         let listener = TcpListener::bind(server_socket).await.unwrap();
 
@@ -55,39 +55,4 @@ impl ServerConfig {
 
 async fn hello(State(server): State<ServerConfig>) -> impl IntoResponse {
     (StatusCode::OK, Json(String::from(&server.oauth2_conf)))
-}
-
-#[derive(Clone, Serialize, Deserialize)]
-pub struct OAuth2Conf {
-    client_id: String,
-    redirect_uri: String,
-    client_secret: String,
-    idp_url: String,
-}
-
-impl OAuth2Conf {
-    pub fn new(conf: Value) -> OAuth2Conf {
-        OAuth2Conf {
-            client_id: conf["client_id"].as_str().unwrap().to_string(),
-            redirect_uri: conf["redirect_uri"].as_str().unwrap().to_string(),
-            client_secret: conf["client_secret"].as_str().unwrap().to_string(),
-            idp_url: conf["idp_url"].as_str().unwrap().to_string()
-        }
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct CallbackAuthCode {
-    code: String
-}
-
-async fn callback(
-    State(server_config): State<ServerConfig>,
-    Path(id_provider): Path<String>,
-    Query(params): Query<CallbackAuthCode>
-) -> impl IntoResponse {
-    println!("id_provider: {}", id_provider.as_str());
-    let oauth2_config: Value = serde_json::from_str(server_config.oauth2_conf.as_str()).expect("Invalid configuration.");
-    let oauth2_config_id_provider = &oauth2_config[id_provider.as_str()];
-    (StatusCode::OK, Json(serde_json::to_value(oauth2_config_id_provider).unwrap()))
 }

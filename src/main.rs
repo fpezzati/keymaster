@@ -1,7 +1,7 @@
 use clap::Parser;
 
 mod server;
-//mod callback;
+mod callback;
 use server::ServerConfig;
 
 #[derive(Parser, Debug)]
