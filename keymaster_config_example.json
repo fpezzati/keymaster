@@ -1,0 +1,20 @@
+{
+    "host": "127.0.0.1",
+    "port": 6000,
+    "public_key": "fake public key",
+    "private_key": "fake private key",
+    "pub oauth2_conf": {
+        "idp1": {
+        "client_id": "client id idp1",
+        "redirect_uri": "redirect uri idp1",
+        "client_secret": "client secret idp1",
+        "idp_url": "idp_url whatever idp1"
+        },
+        "idp2": {
+            "client_id": "client id idp2",
+            "redirect_uri": "redirect uri idp2",
+            "client_secret": "client secret idp2",
+            "idp_url": "idp_url whatever idp2"
+        }
+    }
+}

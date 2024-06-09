@@ -1,7 +1,8 @@
 use clap::Parser;
 
 mod server;
-use server::{ startable, http_server };
+//mod callback;
+use server::ServerConfig;
 
 #[derive(Parser, Debug)]
 #[command(version, about)]
@@ -14,7 +15,7 @@ struct Args {
 async fn main() {
     let args = Args::parse();
     let srv_conf_doc = read_config(&args.config_file.to_string());
-    let httpd = http_server::start(srv_conf_doc.as_str());
+    ServerConfig::start(srv_conf_doc.as_str()).await;
 }
 
 fn read_config(config_file_path: &str) -> String {
