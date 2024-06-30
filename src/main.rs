@@ -1,7 +1,7 @@
 use clap::Parser;
 
 mod server;
-mod callback;
+mod oauth2;
 use server::ServerConfig;
 
 #[derive(Parser, Debug)]

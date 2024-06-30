@@ -70,3 +70,6 @@ It has been a long time. Some considerations:
 Moreover, my code organization is a bit naive.. Configuration will stay the same.
 
 Well, keymaster appears to be broken.. `Unable to find libclang: "couldn't find any valid shared libraries matching...` what's that?
+
+## 20240617
+Refactoring and rewriting.. hyper ver 1+ is too f@*!ng complicate.
