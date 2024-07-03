@@ -1,4 +1,5 @@
 use serde_json::Value;
+use serde_json::json;
 //use cookie::Cookie;
 use serde::{Deserialize, Serialize};
 //use http::header::HeaderName;
@@ -16,6 +17,7 @@ use cookie::Cookie;
 use jwt_simple::claims::Claims;
 use jwt_simple::prelude::Duration;
 use jwt_simple::prelude::RS384KeyPair;
+use jwt_simple::algorithms::RSAKeyPairLike;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct OAuth2Conf {
@@ -95,11 +97,17 @@ fn pick_token_and_provides_response(body_as_json: Value, private_key: String) ->
       token: token.to_string()
     }, Duration::from_hours(1));
     let signed_claims = pkey.sign(unsigned_claims).unwrap();
+
+    #[derive(Deserialize)]
+    struct Payload<'a> {
+        msg: &'a str
+    };
+
     return (
       StatusCode::OK,
-      [(header::SET_COOKIE, signed_claims)],
+      [(header::SET_COOKIE, signed_claims), (header::CONTENT_TYPE, "application/json".to_string())],
       Json(json!({
-        "user": "got that cookie"
+        "msg": "got the cookie"
       }))
     );
 }
