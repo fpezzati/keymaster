@@ -38,7 +38,7 @@ impl OAuth2Conf {
     }
 }
 
-pub async fn request_token(oauth2_conf: Value, code: String) -> impl IntoResponse {
+pub async fn request_token(oauth2_conf: Value, code: String, private_key: String) -> impl IntoResponse {
     let conf = OAuth2Conf::new(oauth2_conf);
     let token_url = format!(
         "{}?client_id={}&redirect_uri={}&client_secret={}&code={}",
@@ -51,31 +51,41 @@ pub async fn request_token(oauth2_conf: Value, code: String) -> impl IntoRespons
             if resp.status() == 200 {
                 match resp.json::<Value>().await {
                     Ok(json_body) => {
-                        
+                        return pick_token_and_provides_response(json_body, private_key);
                     },
                     Err(e) => {
                         // no token, raise error
+                        return build_error_response(StatusCode::INTERNAL_SERVER_ERROR, "No token found".to_string());
                     }
                 }
             } else if resp.status() == 301 {
                 let redirect_uri : String = resp.headers().get("Location").unwrap().to_str().unwrap().to_string();
                 match client.post(redirect_uri.as_str()).header("Accept", "application/json").send().await {
                     Ok(redirect_resp) => {
-
+                        match redirect_resp.json::<Value>().await {
+                            Ok(redirect_body) => {
+                                 return pick_token_and_provides_response(redirect_body, private_key);
+                            },
+                            Err(redirect_err) => {
+                                // something is wrong with redirect reply, raise error
+                                return build_error_response(StatusCode::INTERNAL_SERVER_ERROR, "No token found".to_string());
+                            }
+                        }
                     },
                     Err(e) => {
                         // redirect went wrong, raise error
+                        return build_error_response(StatusCode::INTERNAL_SERVER_ERROR, "No token found".to_string());
                     }
                 }
             } else {
                 // get token went wrong, raise error
+                return build_error_response(StatusCode::INTERNAL_SERVER_ERROR, "No token found".to_string());
             }
         },
         Err(err) => {
-
+            return build_error_response(StatusCode::INTERNAL_SERVER_ERROR, "No token found".to_string());
         }
     }
-    (StatusCode::OK, ())
 }
 
 #[derive(Serialize, Deserialize)]
@@ -86,6 +96,12 @@ struct UserClaims {
 }
 
 fn pick_token_and_provides_response(body_as_json: Value, private_key: String) -> impl IntoResponse {
+
+    // match redirect_body["access_token"].as_str() {
+    //     Ok(access_token) => {},
+    //     Err(access_token_error) => {}
+    // }
+
     let token = body_as_json["access_token"].as_str().unwrap();
     let cookie = Cookie::build(("hey", token)).secure(true).http_only(true).build();
     let cookie_value = String::from(cookie.value());
@@ -109,5 +125,21 @@ fn pick_token_and_provides_response(body_as_json: Value, private_key: String) ->
       Json(json!({
         "msg": "got the cookie"
       }))
+    );
+}
+
+fn build_error_response(status_code : StatusCode, error_msg : String) -> impl IntoResponse {
+    #[derive(Serialize, Deserialize)]
+    struct ErrorResponsePayload {
+      error: String
+    }
+  
+    let error_msg_as_json = ErrorResponsePayload {
+      error: error_msg
+    };
+    return (
+      status_code,
+      [(header::CONTENT_TYPE, "application/json".to_string())],
+      Json(serde_json::to_value(error_msg_as_json).unwrap())
     );
 }

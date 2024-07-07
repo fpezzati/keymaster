@@ -66,6 +66,6 @@ pub async fn callback(
     let oauth2_config: Value = serde_json::from_str(server_config.oauth2_conf.as_str()).expect("Invalid configuration.");
     let oauth2_config_provider = oauth2_config[id_provider.as_str()].clone();
     let temporary_output = oauth2_config[id_provider.as_str()].clone();
-    oauth2::request_token(oauth2_config_provider, code);
+    oauth2::request_token(oauth2_config_provider, code, server_config.private_key);
     (StatusCode::OK, Json(serde_json::to_value(temporary_output).unwrap()))
 }
