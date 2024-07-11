@@ -1,7 +1,8 @@
+use axum::response::IntoResponse;
 use serde_json::Value;
 use serde_json::json;
 use serde::{Deserialize, Serialize};
-use axum::response::IntoResponse;
+use axum::response::Response;
 use axum::http::StatusCode;
 use axum::http::header;
 use axum::Json;
@@ -31,7 +32,7 @@ impl OAuth2Conf {
     }
 }
 
-pub async fn request_token(oauth2_conf: Value, code: String, private_key: String) -> impl IntoResponse {
+pub async fn request_token(oauth2_conf: Value, code: String, private_key: String) -> Response {
     let conf = OAuth2Conf::new(oauth2_conf);
     let token_url = format!(
         "{}?client_id={}&redirect_uri={}&client_secret={}&code={}",
@@ -88,7 +89,7 @@ struct UserClaims {
     token: String
 }
 
-fn pick_token_and_provides_response(body_as_json: Value, private_key: String) -> (StatusCode, [(HeaderName, String); 2], Json<Value>) {
+fn pick_token_and_provides_response(body_as_json: Value, private_key: String) -> Response {
     let token = body_as_json["access_token"].as_str().unwrap();
     let cookie = Cookie::build(("hey", token)).secure(true).http_only(true).build();
     let cookie_value = String::from(cookie.value());
@@ -112,10 +113,10 @@ fn pick_token_and_provides_response(body_as_json: Value, private_key: String) ->
       Json(json!({
         "msg": cookie_value
       }))
-    );
+    ).into_response();
 }
 
-fn build_error_response(status_code : StatusCode, error_msg : String) -> (StatusCode, [(HeaderName, String); 1], Json<Value>) {
+fn build_error_response(status_code : StatusCode, error_msg : String) -> Response {
     #[derive(Serialize, Deserialize)]
     struct ErrorResponsePayload {
       error: String
@@ -128,5 +129,5 @@ fn build_error_response(status_code : StatusCode, error_msg : String) -> (Status
       status_code,
       [(header::CONTENT_TYPE, "application/json".to_string())],
       Json(serde_json::to_value(error_msg_as_json).unwrap())
-    );
+    ).into_response();
 }
