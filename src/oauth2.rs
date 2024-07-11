@@ -1,23 +1,16 @@
 use serde_json::Value;
 use serde_json::json;
-//use cookie::Cookie;
 use serde::{Deserialize, Serialize};
-//use http::header::HeaderName;
-//use jwt_simple::claims::Claims;
-//use jwt_simple::prelude::{Duration, RS384KeyPair};
-
 use axum::response::IntoResponse;
 use axum::http::StatusCode;
 use axum::http::header;
 use axum::Json;
-//use tokio::net::TcpListener;
-//use std::net::SocketAddr;
-use tokio::net::TcpStream;
 use cookie::Cookie;
 use jwt_simple::claims::Claims;
 use jwt_simple::prelude::Duration;
 use jwt_simple::prelude::RS384KeyPair;
 use jwt_simple::algorithms::RSAKeyPairLike;
+use http::header::HeaderName;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct OAuth2Conf {
@@ -95,13 +88,7 @@ struct UserClaims {
     token: String
 }
 
-fn pick_token_and_provides_response(body_as_json: Value, private_key: String) -> impl IntoResponse {
-
-    // match redirect_body["access_token"].as_str() {
-    //     Ok(access_token) => {},
-    //     Err(access_token_error) => {}
-    // }
-
+fn pick_token_and_provides_response(body_as_json: Value, private_key: String) -> (StatusCode, [(HeaderName, String); 2], Json<Value>) {
     let token = body_as_json["access_token"].as_str().unwrap();
     let cookie = Cookie::build(("hey", token)).secure(true).http_only(true).build();
     let cookie_value = String::from(cookie.value());
@@ -115,20 +102,20 @@ fn pick_token_and_provides_response(body_as_json: Value, private_key: String) ->
     let signed_claims = pkey.sign(unsigned_claims).unwrap();
 
     #[derive(Deserialize)]
-    struct Payload<'a> {
-        msg: &'a str
-    };
+    struct Payload {
+        msg: String
+    }
 
     return (
       StatusCode::OK,
       [(header::SET_COOKIE, signed_claims), (header::CONTENT_TYPE, "application/json".to_string())],
       Json(json!({
-        "msg": "got the cookie"
+        "msg": cookie_value
       }))
     );
 }
 
-fn build_error_response(status_code : StatusCode, error_msg : String) -> impl IntoResponse {
+fn build_error_response(status_code : StatusCode, error_msg : String) -> (StatusCode, [(HeaderName, String); 1], Json<Value>) {
     #[derive(Serialize, Deserialize)]
     struct ErrorResponsePayload {
       error: String
