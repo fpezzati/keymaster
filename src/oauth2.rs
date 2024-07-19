@@ -11,7 +11,6 @@ use jwt_simple::claims::Claims;
 use jwt_simple::prelude::Duration;
 use jwt_simple::prelude::RS384KeyPair;
 use jwt_simple::algorithms::RSAKeyPairLike;
-use http::header::HeaderName;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct OAuth2Conf {
