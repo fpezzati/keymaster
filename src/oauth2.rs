@@ -102,11 +102,6 @@ fn pick_token_and_provides_response(body_as_json: Value, private_key: String) ->
     }, Duration::from_hours(1));
     let signed_claims = pkey.sign(unsigned_claims).unwrap();
 
-    #[derive(Deserialize)]
-    struct Payload {
-        msg: String
-    }
-
     return (
       StatusCode::OK,
       [(header::SET_COOKIE, signed_claims), (header::CONTENT_TYPE, "application/json".to_string())],
