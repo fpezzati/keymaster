@@ -48,7 +48,7 @@ pub async fn request_token(oauth2_conf: Value, code: String, private_key: String
                     },
                     Err(e) => {
                         // no token, raise error
-                        return build_error_response(StatusCode::INTERNAL_SERVER_ERROR, "No token found".to_string());
+                        return build_error_response(StatusCode::INTERNAL_SERVER_ERROR, format!("No token found. Original error: {}", e).to_string());
                     }
                 }
             } else if resp.status() == 301 {
@@ -61,22 +61,23 @@ pub async fn request_token(oauth2_conf: Value, code: String, private_key: String
                             },
                             Err(redirect_err) => {
                                 // something is wrong with redirect reply, raise error
-                                return build_error_response(StatusCode::INTERNAL_SERVER_ERROR, "No token found".to_string());
+                                return build_error_response(StatusCode::INTERNAL_SERVER_ERROR, format!("No token found. Original error: {}", redirect_err).to_string());
                             }
                         }
                     },
                     Err(e) => {
                         // redirect went wrong, raise error
-                        return build_error_response(StatusCode::INTERNAL_SERVER_ERROR, "No token found".to_string());
+                        return build_error_response(StatusCode::INTERNAL_SERVER_ERROR, format!("No token found. Original error: {}", e).to_string());
                     }
                 }
             } else {
                 // get token went wrong, raise error
-                return build_error_response(StatusCode::INTERNAL_SERVER_ERROR, "No token found".to_string());
+                let resp_body = resp.text().await.unwrap();
+                return build_error_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Error while fetching token. Original response: {}", resp_body));
             }
         },
         Err(err) => {
-            return build_error_response(StatusCode::INTERNAL_SERVER_ERROR, "No token found".to_string());
+            return build_error_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Error while fetching token. Original error: {}", err).to_string());
         }
     }
 }
