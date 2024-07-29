@@ -16,5 +16,6 @@
             "client_secret": "client secret idp2",
             "idp_url": "idp_url whatever idp2"
         }
-    }
+    },
+    "log_conf": "log4rs.conf.yml"
 }

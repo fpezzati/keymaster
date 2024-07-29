@@ -32,6 +32,7 @@ impl ServerConfig {
             private_key: json_content["private_key"].to_string(),
             oauth2_conf: json_content["oauth2_conf"].to_string()
         };
+        log4rs::init_file(json_content["log_conf"].as_str().unwrap(), Default::default()).unwrap();
 
         let mut hostport = String::new();
         hostport.push_str(server.host.as_str());
@@ -55,13 +56,18 @@ async fn hello(State(server): State<ServerConfig>) -> impl IntoResponse {
     (StatusCode::OK, Json(String::from(&server.oauth2_conf)))
 }
 
+#[derive(serde::Serialize, serde::Deserialize)]
+pub struct CallbackAuthParams {
+  code: String
+}
+
 pub async fn callback(
     State(server_config): State<ServerConfig>,
     Path(id_provider): Path<String>,
-    Query(code): Query<String>
+    Query(params): Query<CallbackAuthParams>
 ) -> impl IntoResponse {
     println!("id_provider: {}", id_provider.as_str());
     let oauth2_config: Value = serde_json::from_str(server_config.oauth2_conf.as_str()).expect("Invalid configuration.");
     let oauth2_config_provider = oauth2_config[id_provider.as_str()].clone();
-    oauth2::request_token(oauth2_config_provider, code, server_config.private_key).await
+    oauth2::request_token(oauth2_config_provider, params.code, server_config.private_key).await
 }

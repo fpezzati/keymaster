@@ -1,0 +1,17 @@
+# set a refresh rate
+refresh_rate: 30 seconds
+
+# appenders
+appenders:
+# this appender will append to the console
+  stdout:
+    kind: console
+# this is a simple string encoder - this will be explained below
+    encoder:
+      pattern: "{d} - {m}{n}"
+
+# the appender that prints to stdout will only print if the log level of the message is warn or above
+root:
+  level: debug
+  appenders:
+    - stdout

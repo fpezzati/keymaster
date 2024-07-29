@@ -11,6 +11,7 @@ use jwt_simple::claims::Claims;
 use jwt_simple::prelude::Duration;
 use jwt_simple::prelude::RS384KeyPair;
 use jwt_simple::algorithms::RSAKeyPairLike;
+use log::{ info, debug, error };
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct OAuth2Conf {
@@ -39,44 +40,54 @@ pub async fn request_token(oauth2_conf: Value, code: String, private_key: String
     );
 
     let client = reqwest::Client::new();
+    debug!("preparing token request");
     match client.get(token_url.as_str()).send().await {
         Ok(resp) => {
             if resp.status() == 200 {
                 match resp.json::<Value>().await {
                     Ok(json_body) => {
+                        debug!("request went fine.");
                         return pick_token_and_provides_response(json_body, private_key);
                     },
                     Err(e) => {
                         // no token, raise error
+                        error!("No token, error returned.");
                         return build_error_response(StatusCode::INTERNAL_SERVER_ERROR, format!("No token found. Original error: {}", e).to_string());
                     }
                 }
             } else if resp.status() == 301 {
+                debug!("Redirect detected.");
                 let redirect_uri : String = resp.headers().get("Location").unwrap().to_str().unwrap().to_string();
                 match client.post(redirect_uri.as_str()).header("Accept", "application/json").send().await {
                     Ok(redirect_resp) => {
+                        debug!("Redirect went fine.");
                         match redirect_resp.json::<Value>().await {
                             Ok(redirect_body) => {
-                                 return pick_token_and_provides_response(redirect_body, private_key);
+                                debug!("Getting token from redirect.");
+                                return pick_token_and_provides_response(redirect_body, private_key);
                             },
                             Err(redirect_err) => {
                                 // something is wrong with redirect reply, raise error
+                                error!("Error while getting redirect response body.");
                                 return build_error_response(StatusCode::INTERNAL_SERVER_ERROR, format!("No token found. Original error: {}", redirect_err).to_string());
                             }
                         }
                     },
                     Err(e) => {
                         // redirect went wrong, raise error
+                        error!("Redirect went wrong.");
                         return build_error_response(StatusCode::INTERNAL_SERVER_ERROR, format!("No token found. Original error: {}", e).to_string());
                     }
                 }
             } else {
                 // get token went wrong, raise error
+                error!("Getting token went wrong, Idp provider replies with an error status code.");
                 let resp_body = resp.text().await.unwrap();
                 return build_error_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Error while fetching token. Original response: {}", resp_body));
             }
         },
         Err(err) => {
+            error!("Token request went wrong.");
             return build_error_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Error while fetching token. Original error: {}", err).to_string());
         }
     }
