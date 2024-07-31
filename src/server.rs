@@ -1,3 +1,4 @@
+use log::info;
 use serde_json::Value;
 use axum::{
     extract::{Path, State, Query}, 
@@ -66,7 +67,7 @@ pub async fn callback(
     Path(id_provider): Path<String>,
     Query(params): Query<CallbackAuthParams>
 ) -> impl IntoResponse {
-    println!("id_provider: {}", id_provider.as_str());
+    info!("id_provider: {}", id_provider.as_str());
     let oauth2_config: Value = serde_json::from_str(server_config.oauth2_conf.as_str()).expect("Invalid configuration.");
     let oauth2_config_provider = oauth2_config[id_provider.as_str()].clone();
     oauth2::request_token(oauth2_config_provider, params.code, server_config.private_key).await

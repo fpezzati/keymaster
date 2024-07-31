@@ -1,4 +1,5 @@
 use axum::response::IntoResponse;
+use reqwest::header::ACCEPT;
 use serde_json::Value;
 use serde_json::json;
 use serde::{Deserialize, Serialize};
@@ -35,14 +36,16 @@ impl OAuth2Conf {
 pub async fn request_token(oauth2_conf: Value, code: String, private_key: String) -> Response {
     let conf = OAuth2Conf::new(oauth2_conf);
     let token_url = format!(
-        "{}?client_id={}&redirect_uri={}&client_secret={}&code={}",
-        conf.idp_url, conf.client_id, conf.redirect_uri, conf.client_secret, code
+        "{}?client_id={}&client_secret={}&code={}&redirect_uri={}",
+        conf.idp_url, conf.client_id, conf.client_secret, code, conf.redirect_uri
     );
-
+    debug!("Ready to fetch token: {token_url}");
     let client = reqwest::Client::new();
     debug!("preparing token request");
-    match client.get(token_url.as_str()).send().await {
+    match client.get(token_url.as_str()).header(ACCEPT, "application/json").send().await {
         Ok(resp) => {
+            let resp_status = resp.status();
+            debug!("response: {resp_status}");
             if resp.status() == 200 {
                 match resp.json::<Value>().await {
                     Ok(json_body) => {
@@ -81,8 +84,8 @@ pub async fn request_token(oauth2_conf: Value, code: String, private_key: String
                 }
             } else {
                 // get token went wrong, raise error
-                error!("Getting token went wrong, Idp provider replies with an error status code.");
                 let resp_body = resp.text().await.unwrap();
+                error!("Getting token went wrong, Idp provider replies with an error: {resp_body}");
                 return build_error_response(StatusCode::INTERNAL_SERVER_ERROR, format!("Error while fetching token. Original response: {}", resp_body));
             }
         },
@@ -101,6 +104,7 @@ struct UserClaims {
 }
 
 fn pick_token_and_provides_response(body_as_json: Value, private_key: String) -> Response {
+    debug!("Body from which to pick access token: {body_as_json}");
     let token = body_as_json["access_token"].as_str().unwrap();
     let cookie = Cookie::build(("hey", token)).secure(true).http_only(true).build();
     let cookie_value = String::from(cookie.value());

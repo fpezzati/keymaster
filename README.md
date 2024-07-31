@@ -73,3 +73,9 @@ Well, keymaster appears to be broken.. `Unable to find libclang: "couldn't find 
 
 ## 20240617
 Refactoring and rewriting.. hyper ver 1+ is too f@*!ng complicate.
+
+
+
+https://github.com/login/oauth/authorize?clientid=your_client_id&redirect_uri=your_redirect_uri&scope=user
+
+https://github.com/login/oauth/authorize?client_id=83787c1e2659352d9da6&redirect_uri=http%3A%2F%2127.0.0.1%3A3000%2Fcallback%2Fgithub&scope=user
