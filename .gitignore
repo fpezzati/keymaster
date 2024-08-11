@@ -2,3 +2,4 @@
 keymaster_dev_config.json
 keymaster.key
 keymaster.pub.key
+*.pem
