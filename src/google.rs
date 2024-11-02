@@ -36,7 +36,7 @@ impl OAuth2Conf {
 pub async fn request_token(oauth2_conf: Value, code: String, private_key: String) -> Response {
     let conf = OAuth2Conf::new(oauth2_conf);
     let token_url = format!(
-        "{}?client_id={}&client_secret={}&code={}&redirect_uri={}",
+        "{}?client_id={}&client_secret={}&code={}&redirect_uri={}&response_type=code&scope=userinfo.email",
         conf.idp_url, conf.client_id, conf.client_secret, code, conf.redirect_uri
     );
     debug!("Ready to fetch token: {token_url}");
@@ -52,20 +52,39 @@ pub async fn request_token(oauth2_conf: Value, code: String, private_key: String
             let resp_status = resp.status();
             debug!("response: {resp_status}");
             if resp.status() == 200 {
-                match resp.json::<Value>().await {
-                    Ok(json_body) => {
-                        debug!("request went fine.");
+                match resp.text().await {
+                    Ok(text_body) => {
+                        debug!("Got response that should contains token in body: {text_body}");
+                        let json_body =
+                            serde_json::from_str::<serde_json::Value>(text_body.as_str()).unwrap();
                         return pick_token_and_provides_response(json_body, private_key);
                     }
                     Err(e) => {
-                        // no token, raise error
-                        error!("No token, error returned.");
+                        error!("Something wrong while reading response. Original error: {e}");
                         return build_error_response(
                             StatusCode::INTERNAL_SERVER_ERROR,
-                            format!("No token found. Original error: {}", e).to_string(),
+                            format!(
+                                "Something wrong while reading response. Original error: {}",
+                                e
+                            )
+                            .to_string(),
                         );
                     }
                 }
+                //                match resp.json::<Value>().await {
+                //                    Ok(json_body) => {
+                //                        debug!("request went fine.");
+                //                        return pick_token_and_provides_response(json_body, private_key);
+                //                    }
+                //                    Err(e) => {
+                //                        // no token, raise error
+                //                        let resp_body = resp.text().await.unwrap();
+                //                        error!("No token, error returned. Response was: {resp_body}");
+                //                        return build_error_response(
+                //                            StatusCode::INTERNAL_SERVER_ERROR,
+                //                            format!("No token found. Original error: {}", e).to_string(),
+                //                        );
+                //                    }
             } else if resp.status() == 301 {
                 debug!("Redirect detected.");
                 let redirect_uri: String = resp
@@ -149,7 +168,6 @@ fn pick_token_and_provides_response(body_as_json: Value, private_key: String) ->
         .http_only(true)
         .build();
     let cookie_value = String::from(cookie.value());
-    debug!("Private key: {private_key}");
     let pkey = RS384KeyPair::from_pem(private_key.as_str()).unwrap();
 
     let unsigned_claims = Claims::with_custom_claims(

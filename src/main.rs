@@ -1,14 +1,14 @@
 use clap::Parser;
 
+mod github;
 mod server;
-mod oauth2;
 use server::ServerConfig;
 
 #[derive(Parser, Debug)]
 #[command(version, about)]
 struct Args {
-   #[arg(long)]
-   config_file: String
+    #[arg(long)]
+    config_file: String,
 }
 
 #[tokio::main]
@@ -19,7 +19,8 @@ async fn main() {
 }
 
 fn read_config(config_file_path: &str) -> String {
-  let file_content = std::fs::read(config_file_path).expect("File does not exist or is corrupted.");
-  let return_value = std::str::from_utf8(&file_content).expect("File is corrupted.");
-  return_value.to_string()
+    let file_content =
+        std::fs::read(config_file_path).expect("File does not exist or is corrupted.");
+    let return_value = std::str::from_utf8(&file_content).expect("File is corrupted.");
+    return_value.to_string()
 }

@@ -74,8 +74,45 @@ Well, keymaster appears to be broken.. `Unable to find libclang: "couldn't find 
 ## 20240617
 Refactoring and rewriting.. hyper ver 1+ is too f@*!ng complicate.
 
+## 20240816
+Ok, now I am getting a positive interaction while using github, but I cannot use google because he needs a different token request url...
 
+I fear I have to split codebase, one function for idp.
 
-https://github.com/login/oauth/authorize?clientid=your_client_id&redirect_uri=your_redirect_uri&scope=user
+## 20240923
+Bubbling errors instead of returning http error responses. I have to get cookie lib to produce http only and secure cookies, both values are false despite the fact I put them to true.
 
-https://github.com/login/oauth/authorize?client_id=83787c1e2659352d9da6&redirect_uri=http%3A%2F%2127.0.0.1%3A3000%2Fcallback%2Fgithub&scope=user
+## 20240929
+Didn't turn http error responses into errors.. Unsure that helps. Now I want user email from IdP.
+
+Ingress is ok, I have to integrate my auth proxy with nginx-ingress-controller. See [this](https://kubernetes.github.io/ingress-nginx/examples/auth/oauth-external-auth/).
+
+## 20241008
+Client part works but's ugly...Most important: it hasn't good error handling. The code I wrote risks to panic. I don't want that auth client panic because service must stay on if any of its clients fails.
+I am stumbling into some pyramid of doom while handling Result, guess I am doing things weird.
+
+So, I start removing code about returning axum's Response and return a Result with a custom error instead. Not sure that's good way to go, I am from java, error handling is an entire different thing there.
+Using a custom error should give me confidence about what error my functions should return.
+
+## 20241019
+Improving error handling also means to remove unnecessary unwraps.. Code is a bit naive.
+
+## 20241020
+Giving `std::result::Result` a better look.
+
+## 20241024
+I introduce use of `map_err`. My may-fail functions always return `Result<whatever, GithubErr>`, a custom error.
+
+Fetching github user's email fails, but I had no more panics and tokio continues to serve requests. That's good.
+
+## 20241026
+Now that I have normalized errors by `map_err` I can go after this new main issue: can't fetch user's email by github api.. Then I'll be back on code cleaning.
+
+## 20241028
+Github apis are ok, fetching user email by curl was cakewalk with given token. My request is wrong.
+
+## 20241101
+It was the `User-Agent` header that I was missing... That was totally uncovered into docs. Now it works.
+
+## 20241102
+Removing a couple of unwraps. I guess I have to use an enum instead of a single `GithubErr`. We'll see. Next thing is: integrate another IdP by loading code as separate module (webassembly?).

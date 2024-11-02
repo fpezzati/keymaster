@@ -5,18 +5,19 @@ use axum::{
     routing::get,
     Json, Router,
 };
-use log::{debug, info};
+use log::info;
 use serde_json::Value;
 use std::fs;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
 
-use crate::oauth2;
+use crate::github;
 
 #[derive(Clone)]
 pub struct ServerConfig {
     host: String,
     port: String,
+    application_name: String,
     public_key: String,
     private_key: String,
     pub oauth2_conf: String,
@@ -31,8 +32,13 @@ impl ServerConfig {
             fs::read_to_string(String::from(json_content["private_key"].as_str().unwrap()))
                 .unwrap();
         let server = ServerConfig {
-            host: json_content["host"].as_str().unwrap().to_string(),
+            host: String::from(
+                json_content["host"]
+                    .as_str()
+                    .expect("invalid host specified"),
+            ), //seems odd but using to_string causes quotes to pollute value.
             port: json_content["port"].to_string(),
+            application_name: json_content["application_name"].to_string(),
             public_key: public_key_content,
             private_key: private_key_content,
             oauth2_conf: json_content["oauth2_conf"].to_string(),
@@ -81,9 +87,10 @@ pub async fn callback(
     let oauth2_config: Value =
         serde_json::from_str(server_config.oauth2_conf.as_str()).expect("Invalid configuration.");
     let oauth2_config_provider = oauth2_config[id_provider.as_str()].clone();
-    oauth2::request_token(
+    github::request_token(
         oauth2_config_provider,
         params.code,
+        server_config.application_name,
         server_config.private_key,
     )
     .await
