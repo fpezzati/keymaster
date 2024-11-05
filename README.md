@@ -116,3 +116,6 @@ It was the `User-Agent` header that I was missing... That was totally uncovered 
 
 ## 20241102
 Removing a couple of unwraps. I guess I have to use an enum instead of a single `GithubErr`. We'll see. Next thing is: integrate another IdP by loading code as separate module (webassembly?).
+
+## 20241105
+Errors handling can be better with enum, I guess I'll get rid of dummy duplications. I also have to implement the 'verify' function. Or should I move to next IdP?
