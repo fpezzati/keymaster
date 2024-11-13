@@ -27,14 +27,44 @@ pub struct OAuth2Conf {
 }
 
 impl OAuth2Conf {
-    pub fn new(conf: Value) -> OAuth2Conf {
-        OAuth2Conf {
-            client_id: conf["client_id"].as_str().unwrap().to_string(),
-            redirect_uri: conf["redirect_uri"].as_str().unwrap().to_string(),
-            client_secret: conf["client_secret"].as_str().unwrap().to_string(),
-            idp_url: conf["idp_url"].as_str().unwrap().to_string(),
-            get_user_email_url: conf["get_user_email_url"].as_str().unwrap().to_string(),
-        }
+    fn new(conf: Value) -> Result<OAuth2Conf, GithubErr> {
+        Ok(OAuth2Conf {
+            client_id: conf["client_id"]
+                .as_str()
+                .ok_or(GithubErr {
+                    message: "missing 'client_id' value in configuration".to_string(),
+                    http_code: 500,
+                })?
+                .to_string(),
+            redirect_uri: conf["redirect_uri"]
+                .as_str()
+                .ok_or(GithubErr {
+                    message: "missing 'redirect_uri' value in configuration".to_string(),
+                    http_code: 500,
+                })?
+                .to_string(),
+            client_secret: conf["client_secret"]
+                .as_str()
+                .ok_or(GithubErr {
+                    message: "missing 'client_secret' value in configuration".to_string(),
+                    http_code: 500,
+                })?
+                .to_string(),
+            idp_url: conf["idp_url"]
+                .as_str()
+                .ok_or(GithubErr {
+                    message: "missing 'idp_url' value in configuration".to_string(),
+                    http_code: 500,
+                })?
+                .to_string(),
+            get_user_email_url: conf["get_user_email_url"]
+                .as_str()
+                .ok_or(GithubErr {
+                    message: "missing 'get_user_email_url' value in configuration".to_string(),
+                    http_code: 500,
+                })?
+                .to_string(),
+        })
     }
 }
 
@@ -44,7 +74,11 @@ pub async fn request_token(
     application_name: String,
     private_key: String,
 ) -> Response {
-    let conf = OAuth2Conf::new(oauth2_conf);
+    let conf = OAuth2Conf::new(oauth2_conf)
+        .map_err(|err| {
+            return build_error_response(err);
+        })
+        .unwrap();
     let token_url = format!(
         "{}?client_id={}&client_secret={}&code={}&redirect_uri={}",
         conf.idp_url, conf.client_id, conf.client_secret, code, conf.redirect_uri
@@ -65,10 +99,7 @@ pub async fn request_token(
                 match handle_200(conf, application_name, private_key, resp).await {
                     Ok(resp_to_200) => return resp_to_200,
                     Err(e) => {
-                        return build_error_response(
-                            StatusCode::from_u16(e.http_code).unwrap(),
-                            e.message,
-                        );
+                        return build_error_response(e);
                     }
                 }
             } else if resp.status() == 301 {
@@ -77,31 +108,26 @@ pub async fn request_token(
                         return resp_to_301;
                     }
                     Err(e) => {
-                        return build_error_response(
-                            StatusCode::from_u16(e.http_code).unwrap(),
-                            e.message,
-                        );
+                        return build_error_response(e);
                     }
                 }
             } else {
                 // get token went wrong, raise error
                 let resp_body = resp.text().await.unwrap();
                 error!("Getting token went wrong, Idp provider replies with an error: {resp_body}");
-                return build_error_response(
-                    StatusCode::INTERNAL_SERVER_ERROR,
-                    format!(
-                        "Error while fetching token. Original response: {}",
-                        resp_body
-                    ),
-                );
+                return build_error_response(GithubErr {
+                    message: format!("Error while fetching token. Original error: {}", resp_body)
+                        .to_string(),
+                    http_code: 500,
+                });
             }
         }
         Err(err) => {
             error!("Token request went wrong.");
-            return build_error_response(
-                StatusCode::INTERNAL_SERVER_ERROR,
-                format!("Error while fetching token. Original error: {}", err).to_string(),
-            );
+            return build_error_response(GithubErr {
+                message: format!("Error while fetching token. Original error: {}", err).to_string(),
+                http_code: 500,
+            });
         }
     }
 }
@@ -318,15 +344,17 @@ fn build_succesful_response(cookie_value: String, user_email: String) -> Respons
         .into_response();
 }
 
-fn build_error_response(status_code: StatusCode, error_msg: String) -> Response {
+fn build_error_response(error: GithubErr) -> Response {
     #[derive(Serialize, Deserialize)]
     struct ErrorResponsePayload {
         error: String,
     }
 
-    let error_msg_as_json = ErrorResponsePayload { error: error_msg };
+    let error_msg_as_json = ErrorResponsePayload {
+        error: error.message,
+    };
     return (
-        status_code,
+        StatusCode::from_u16(error.http_code).unwrap(),
         [(header::CONTENT_TYPE, "application/json".to_string())],
         Json(serde_json::to_value(error_msg_as_json).unwrap()),
     )

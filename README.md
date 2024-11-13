@@ -119,3 +119,8 @@ Removing a couple of unwraps. I guess I have to use an enum instead of a single 
 
 ## 20241105
 Errors handling can be better with enum, I guess I'll get rid of dummy duplications. I also have to implement the 'verify' function. Or should I move to next IdP?
+
+## 20241109
+Error handling is no better with enums to me. After a brief experiment I decide to turn back on structs, maybe I am OOP biased, but they make more sense to me than enums. Way more easy..
+
+## 20241110
