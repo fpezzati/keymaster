@@ -2,6 +2,7 @@ use clap::Parser;
 
 mod github;
 mod server;
+mod verify;
 use server::ServerConfig;
 
 #[derive(Parser, Debug)]

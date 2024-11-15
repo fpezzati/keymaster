@@ -1,5 +1,6 @@
 use axum::{
     extract::{Path, Query, State},
+    http::HeaderMap,
     http::StatusCode,
     response::IntoResponse,
     routing::get,
@@ -12,6 +13,7 @@ use std::net::SocketAddr;
 use tokio::net::TcpListener;
 
 use crate::github;
+use crate::verify;
 
 #[derive(Clone)]
 pub struct ServerConfig {
@@ -60,7 +62,7 @@ impl ServerConfig {
 
         let routes = Router::new()
             .route("/", get(hello))
-            //          .route("/verify", post(verify))
+            .route("/verify", get(verify).post(verify))
             .route("/callback/:id_provider", get(callback))
             .with_state(server);
         let listener = TcpListener::bind(server_socket).await.unwrap();
@@ -94,4 +96,11 @@ pub async fn callback(
         server_config.private_key,
     )
     .await
+}
+
+async fn verify(
+    State(server_config): State<ServerConfig>,
+    headers: HeaderMap,
+) -> impl IntoResponse {
+    verify::check_token(server_config.public_key, headers).await
 }
