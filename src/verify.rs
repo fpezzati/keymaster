@@ -1,5 +1,8 @@
 use axum::{
-    http::{header::AUTHORIZATION, HeaderMap, StatusCode},
+    http::{
+        header::{AUTHORIZATION, COOKIE},
+        HeaderMap, StatusCode,
+    },
     response::IntoResponse,
 };
 use jwt_simple::algorithms::RS384PublicKey;

@@ -1,5 +1,6 @@
 use axum::{
     extract::{Path, Query, State},
+    http::header::{AUTHORIZATION, CONTENT_TYPE, COOKIE},
     http::HeaderMap,
     http::StatusCode,
     response::IntoResponse,
@@ -102,5 +103,29 @@ async fn verify(
     State(server_config): State<ServerConfig>,
     headers: HeaderMap,
 ) -> impl IntoResponse {
+    if headers.get(COOKIE).is_some() {
+        headers.get(COOKIE).unwrap().to_str().map_err(|err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                [(CONTENT_TYPE, "application/json".to_string())],
+                Json(serde_json::to_value(format!(
+                    "Cannot parse COOKIE value to string. Original error: {}",
+                    err
+                ))),
+            )
+        });
+    }
+    if headers.get(AUTHORIZATION).is_some() {
+        headers.get(COOKIE).unwrap().to_str().map_err(|err| {
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                [(CONTENT_TYPE, "application/json".to_string())],
+                Json(serde_json::to_value(format!(
+                    "Cannot parse AUTHORIZATION header value to string. Original error: {}",
+                    err
+                ))),
+            )
+        });
+    }
     verify::check_token(server_config.public_key, headers).await
 }
