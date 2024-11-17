@@ -7,7 +7,8 @@ use axum::{
     routing::get,
     Json, Router,
 };
-use log::info;
+use cookie::Cookie;
+use log::{debug, error, info};
 use serde_json::Value;
 use std::fs;
 use std::net::SocketAddr;
@@ -102,30 +103,61 @@ pub async fn callback(
 async fn verify(
     State(server_config): State<ServerConfig>,
     headers: HeaderMap,
+    cookies: Cookie,
 ) -> impl IntoResponse {
-    if headers.get(COOKIE).is_some() {
-        headers.get(COOKIE).unwrap().to_str().map_err(|err| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                [(CONTENT_TYPE, "application/json".to_string())],
-                Json(serde_json::to_value(format!(
-                    "Cannot parse COOKIE value to string. Original error: {}",
-                    err
-                ))),
-            )
-        });
+    if cookies.get(SESSION_COOKIE).is_some() {
+        let authorization_header_value = headers
+            .get(SESSION_COOKIE)
+            .unwrap()
+            .to_str()
+            .map_err(|err| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    [(CONTENT_TYPE, "application/json".to_string())],
+                    Json(serde_json::to_value(format!(
+                        "Cannot parse COOKIE value to string. Original error: {}",
+                        err
+                    ))),
+                )
+            })
+            .unwrap();
+        debug!("AUTHORIZATION: {}", authorization_header_value);
+        info!(
+            "JWT: {}",
+            str::replace(authorization_header_value, "Bearer ", "")
+        );
+        let token_to_check = str::replace(authorization_header_value, "Bearer ", "");
+        verify::check_token(server_config.public_key, token_to_check)
+            .await
+            .into_response()
+    } else if headers.get(AUTHORIZATION).is_some() {
+        debug!("got AUTHORIZATION request");
+        let authorization_header_value = headers
+            .get(COOKIE)
+            .unwrap()
+            .to_str()
+            .map_err(|err| {
+                (
+                    StatusCode::INTERNAL_SERVER_ERROR,
+                    [(CONTENT_TYPE, "application/json".to_string())],
+                    Json(serde_json::to_value(format!(
+                        "Cannot parse AUTHORIZATION header value to string. Original error: {}",
+                        err
+                    ))),
+                )
+            })
+            .unwrap();
+        debug!("AUTHORIZATION: {}", authorization_header_value);
+        info!(
+            "JWT: {}",
+            str::replace(authorization_header_value, "Bearer ", "")
+        );
+        let token_to_check = str::replace(authorization_header_value, "Bearer ", "");
+        verify::check_token(server_config.public_key, token_to_check)
+            .await
+            .into_response()
+    } else {
+        error!("Nor AUTHORIZATION header, nor COOKIE value found to verify.");
+        (StatusCode::UNAUTHORIZED).into_response()
     }
-    if headers.get(AUTHORIZATION).is_some() {
-        headers.get(COOKIE).unwrap().to_str().map_err(|err| {
-            (
-                StatusCode::INTERNAL_SERVER_ERROR,
-                [(CONTENT_TYPE, "application/json".to_string())],
-                Json(serde_json::to_value(format!(
-                    "Cannot parse AUTHORIZATION header value to string. Original error: {}",
-                    err
-                ))),
-            )
-        });
-    }
-    verify::check_token(server_config.public_key, headers).await
 }
