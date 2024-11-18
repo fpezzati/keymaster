@@ -124,3 +124,10 @@ Errors handling can be better with enum, I guess I'll get rid of dummy duplicati
 Error handling is no better with enums to me. After a brief experiment I decide to turn back on structs, maybe I am OOP biased, but they make more sense to me than enums. Way more easy..
 
 ## 20241110
+I was able to get better error handling and a full working authentication run.
+
+## 20241118
+I realize following things:
+- cookie I build are naive,
+- cookie building should not stay into idp file, the github.rs, but stay in server. What is in github.rs should only care about picking token and related username/email,
+- cookie I build is NOT secure and NOT httponly. How's that possible?

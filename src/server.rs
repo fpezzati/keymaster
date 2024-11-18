@@ -22,6 +22,7 @@ pub struct ServerConfig {
     host: String,
     port: String,
     application_name: String,
+    domain: String,
     public_key: String,
     private_key: String,
     pub oauth2_conf: String,
@@ -31,7 +32,8 @@ impl ServerConfig {
     pub async fn start(config: &str) {
         println!("{}", config);
         let json_content: Value = serde_json::from_str(&config).expect("Invalid file.");
-        let public_key_content = json_content["public_key"].to_string();
+        let public_key_content =
+            fs::read_to_string(String::from(json_content["public_key"].as_str().unwrap())).unwrap();
         let private_key_content =
             fs::read_to_string(String::from(json_content["private_key"].as_str().unwrap()))
                 .unwrap();
@@ -46,6 +48,7 @@ impl ServerConfig {
             public_key: public_key_content,
             private_key: private_key_content,
             oauth2_conf: json_content["oauth2_conf"].to_string(),
+            domain: json_content["domain"].to_string(),
         };
         log4rs::init_file(
             json_content["log_conf"].as_str().unwrap(),
@@ -96,6 +99,7 @@ pub async fn callback(
         params.code,
         server_config.application_name,
         server_config.private_key,
+        server_config.domain,
     )
     .await
 }
@@ -103,11 +107,10 @@ pub async fn callback(
 async fn verify(
     State(server_config): State<ServerConfig>,
     headers: HeaderMap,
-    cookies: Cookie,
 ) -> impl IntoResponse {
-    if cookies.get(SESSION_COOKIE).is_some() {
+    if headers.get(COOKIE).is_some() {
         let authorization_header_value = headers
-            .get(SESSION_COOKIE)
+            .get(COOKIE)
             .unwrap()
             .to_str()
             .map_err(|err| {

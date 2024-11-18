@@ -73,6 +73,7 @@ pub async fn request_token(
     code: String,
     application_name: String,
     private_key: String,
+    domain: String,
 ) -> Response {
     let conf = OAuth2Conf::new(oauth2_conf)
         .map_err(|err| {
@@ -96,14 +97,14 @@ pub async fn request_token(
             let resp_status = resp.status();
             debug!("response: {resp_status}");
             if resp.status() == 200 {
-                match handle_200(conf, application_name, private_key, resp).await {
+                match handle_200(conf, application_name, private_key, domain, resp).await {
                     Ok(resp_to_200) => return resp_to_200,
                     Err(e) => {
                         return build_error_response(e);
                     }
                 }
             } else if resp.status() == 301 {
-                match handle_301(conf, application_name, private_key, resp).await {
+                match handle_301(conf, application_name, private_key, domain, resp).await {
                     Ok(resp_to_301) => {
                         return resp_to_301;
                     }
@@ -136,6 +137,7 @@ async fn handle_200(
     conf: OAuth2Conf,
     application_name: String,
     private_key: String,
+    domain: String,
     resp: reqwest::Response,
 ) -> Result<Response, GithubErr> {
     match resp.text().await {
@@ -159,6 +161,7 @@ async fn handle_200(
                 application_name,
                 user_email_to_send.clone(),
                 private_key,
+                domain,
             )?;
             Ok(build_succesful_response(cookie_to_send, user_email_to_send))
         }
@@ -180,6 +183,7 @@ async fn handle_301(
     conf: OAuth2Conf,
     application_name: String,
     private_key: String,
+    domain: String,
     resp: reqwest::Response,
 ) -> Result<Response, GithubErr> {
     debug!("Redirect detected.");
@@ -224,6 +228,7 @@ async fn handle_301(
         application_name,
         user_email_to_send.clone(),
         private_key,
+        domain,
     )?;
     let successful_resp: Response = build_succesful_response(cookie_to_send, user_email_to_send);
     Ok(successful_resp)
@@ -255,6 +260,7 @@ fn build_cookie(
     application_name: String,
     user: String,
     private_key: String,
+    domain: String,
 ) -> Result<String, GithubErr> {
     let pkey = RS384KeyPair::from_pem(private_key.as_str()).unwrap();
     let unsigned_claims = Claims::with_custom_claims(
@@ -269,11 +275,17 @@ fn build_cookie(
         http_code: 500,
         message: format!("error while signing claims. Original error was: {}", error),
     })?;
-
-    let cookie = Cookie::build((application_name, signed_claims))
-        .secure(true)
-        .http_only(true)
-        .build();
+    info!("building cookie: {}, {}", application_name, signed_claims);
+    let cookie = Cookie::build((
+        application_name.clone(),
+        format!("{}={}", application_name, signed_claims).to_string(),
+    ))
+    .domain(domain)
+    .path("/")
+    .secure(true)
+    .http_only(true)
+    .max_age(cookie::time::Duration::days(1))
+    .build();
     let cookie_as_string = String::from(cookie.value());
     return Ok(cookie_as_string);
 }
