@@ -277,7 +277,7 @@ fn build_cookie(
     })?;
     info!("building cookie: {}, {}", application_name, signed_claims);
     let cookie = Cookie::build((
-        application_name.clone(),
+        application_name.as_str(),
         format!("{}={}", application_name, signed_claims).to_string(),
     ))
     .domain(domain)
@@ -343,6 +343,10 @@ async fn get_user_email(token: String, get_user_email_url: String) -> Result<Str
 }
 
 fn build_succesful_response(cookie_value: String, user_email: String) -> Response {
+    info!(
+        "building response with user_email: {}, cookie: {}",
+        user_email, cookie_value
+    );
     return (
         StatusCode::OK,
         [

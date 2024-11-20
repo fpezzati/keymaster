@@ -7,7 +7,6 @@ use axum::{
     routing::get,
     Json, Router,
 };
-use cookie::Cookie;
 use log::{debug, error, info};
 use serde_json::Value;
 use std::fs;
@@ -44,11 +43,14 @@ impl ServerConfig {
                     .expect("invalid host specified"),
             ), //seems odd but using to_string causes quotes to pollute value.
             port: json_content["port"].to_string(),
-            application_name: json_content["application_name"].to_string(),
+            application_name: json_content["application_name"]
+                .as_str()
+                .unwrap()
+                .to_string(),
             public_key: public_key_content,
             private_key: private_key_content,
             oauth2_conf: json_content["oauth2_conf"].to_string(),
-            domain: json_content["domain"].to_string(),
+            domain: json_content["domain"].as_str().unwrap().to_string(),
         };
         log4rs::init_file(
             json_content["log_conf"].as_str().unwrap(),
