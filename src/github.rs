@@ -276,17 +276,20 @@ fn build_cookie(
         message: format!("error while signing claims. Original error was: {}", error),
     })?;
     info!("building cookie: {}, {}", application_name, signed_claims);
-    let cookie = Cookie::build((
-        application_name.as_str(),
-        format!("{}={}", application_name, signed_claims).to_string(),
-    ))
-    .domain(domain)
-    .path("/")
-    .secure(true)
-    .http_only(true)
-    .max_age(cookie::time::Duration::days(1))
-    .build();
-    let cookie_as_string = String::from(cookie.value());
+    //let cookie = Cookie::build((
+    //    application_name.as_str(),
+    //    format!("{}={}", application_name, signed_claims).to_string(),
+    //))
+    //.domain(domain)
+    //.path("/")
+    //.secure(true)
+    //.http_only(true)
+    //.max_age(cookie::time::Duration::days(1))
+    //.build();
+    let cookie_as_string = format!(
+        "{}={}; Domain={}; Path=/; Secure; HttpOnly; Max-Age={}",
+        application_name, signed_claims, domain, 86400
+    );
     return Ok(cookie_as_string);
 }
 

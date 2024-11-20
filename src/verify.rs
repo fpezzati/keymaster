@@ -16,10 +16,11 @@ pub async fn check_token(public_key: String, token_to_check: String) -> impl Int
         "Verifying token: {}, with public key: {}",
         token_to_check, public_key
     );
+    let token_to_check_values: Vec<&str> = token_to_check.split("=").collect();
     let token_checker = RS384PublicKey::from_pem(public_key.as_str())
         .map_err(|err| error!("Invalid key. Original error: {}", err))
         .unwrap();
-    match token_checker.verify_token::<UserClaims>(&token_to_check, None) {
+    match token_checker.verify_token::<UserClaims>(&token_to_check_values[1], None) {
         Ok(_claims) => StatusCode::OK,
         Err(_error) => {
             info!("Cannot validate given token. Original error: {}", _error);
