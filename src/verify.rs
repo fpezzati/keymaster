@@ -2,14 +2,8 @@ use crate::server::ServerError;
 use jwt_simple::algorithms::RS384PublicKey;
 use jwt_simple::algorithms::RSAPublicKeyLike;
 use log::{error, info};
-use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize)]
-pub struct UserClaims {
-    user: String,
-    auth_provider: String,
-    token: String,
-}
+use crate::server::UserClaims;
 
 pub async fn check_token(public_key: String, token_to_check: String) -> Result<bool, ServerError> {
     info!(

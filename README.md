@@ -138,3 +138,8 @@ I left this log behind. I implement the 'verify' function, I also decide it is t
 Moving accessory functions outside the two mods and into server mod. The verify mod is already clean, let's go for github.
 
 Changing opinion again about errors... Enums aren't cool..
+
+## 20241130
+Rearranged functions in module with proper responsibility.
+
+Still struggling with error management.
