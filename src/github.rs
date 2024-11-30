@@ -1,21 +1,11 @@
-use core::fmt;
-
-use axum::http::header;
 use axum::http::StatusCode;
-use axum::response::IntoResponse;
-use axum::response::Response;
-use axum::Json;
-use cookie::Cookie;
-use jwt_simple::algorithms::RSAKeyPairLike;
-use jwt_simple::claims::Claims;
-use jwt_simple::prelude::Duration;
-use jwt_simple::prelude::RS384KeyPair;
-use log::info;
-use log::{debug, error};
+use log::{debug, error, info};
 use reqwest::header::ACCEPT;
 use serde::{Deserialize, Serialize};
-use serde_json::json;
 use serde_json::Value;
+
+use crate::server::GithubErr;
+use crate::server::UserClaims;
 
 #[derive(Clone, Serialize, Deserialize)]
 pub struct OAuth2Conf {
@@ -68,18 +58,8 @@ impl OAuth2Conf {
     }
 }
 
-pub async fn request_token(
-    oauth2_conf: Value,
-    code: String,
-    application_name: String,
-    private_key: String,
-    domain: String,
-) -> Response {
-    let conf = OAuth2Conf::new(oauth2_conf)
-        .map_err(|err| {
-            return build_error_response(err);
-        })
-        .unwrap();
+pub async fn request_token(oauth2_conf: Value, code: String) -> Result<UserClaims, GithubErr> {
+    let conf = OAuth2Conf::new(oauth2_conf)?;
     let token_url = format!(
         "{}?client_id={}&client_secret={}&code={}&redirect_uri={}",
         conf.idp_url, conf.client_id, conf.client_secret, code, conf.redirect_uri
@@ -97,49 +77,45 @@ pub async fn request_token(
             let resp_status = resp.status();
             debug!("response: {resp_status}");
             if resp.status() == 200 {
-                match handle_200(conf, application_name, private_key, domain, resp).await {
-                    Ok(resp_to_200) => return resp_to_200,
-                    Err(e) => {
-                        return build_error_response(e);
-                    }
-                }
+                let token_to_send = handle_200(resp).await?;
+                let user_email_to_send =
+                    get_user_email(token_to_send.clone(), conf.get_user_email_url).await?;
+                return Ok(UserClaims {
+                    auth_provider: "TODO".to_string(),
+                    token: token_to_send,
+                    user: user_email_to_send,
+                });
             } else if resp.status() == 301 {
-                match handle_301(conf, application_name, private_key, domain, resp).await {
-                    Ok(resp_to_301) => {
-                        return resp_to_301;
-                    }
-                    Err(e) => {
-                        return build_error_response(e);
-                    }
-                }
+                let token_to_send = handle_301(resp).await?;
+                let user_email_to_send =
+                    get_user_email(token_to_send.clone(), conf.get_user_email_url).await?;
+                return Ok(UserClaims {
+                    auth_provider: "TODO".to_string(),
+                    token: token_to_send,
+                    user: user_email_to_send,
+                });
             } else {
                 // get token went wrong, raise error
                 let resp_body = resp.text().await.unwrap();
                 error!("Getting token went wrong, Idp provider replies with an error: {resp_body}");
-                return build_error_response(GithubErr {
+                Err(GithubErr {
                     message: format!("Error while fetching token. Original error: {}", resp_body)
                         .to_string(),
                     http_code: 500,
-                });
+                })
             }
         }
         Err(err) => {
             error!("Token request went wrong.");
-            return build_error_response(GithubErr {
+            Err(GithubErr {
                 message: format!("Error while fetching token. Original error: {}", err).to_string(),
                 http_code: 500,
-            });
+            })
         }
     }
 }
 
-async fn handle_200(
-    conf: OAuth2Conf,
-    application_name: String,
-    private_key: String,
-    domain: String,
-    resp: reqwest::Response,
-) -> Result<Response, GithubErr> {
+async fn handle_200(resp: reqwest::Response) -> Result<String, GithubErr> {
     match resp.text().await {
         Ok(text_body) => {
             debug!("Got response that should contains token in body: {text_body}");
@@ -154,16 +130,7 @@ async fn handle_200(
                 http_code: 500,
                 message: String::from("Cannot find access_token element in response body."),
             })?;
-            let user_email_to_send =
-                get_user_email(String::from(token), conf.get_user_email_url).await?;
-            let cookie_to_send = build_cookie(
-                String::from(token),
-                application_name,
-                user_email_to_send.clone(),
-                private_key,
-                domain,
-            )?;
-            Ok(build_succesful_response(cookie_to_send, user_email_to_send))
+            Ok(token.to_string())
         }
         Err(e) => {
             error!("Something wrong while reading response. Original error: {e}");
@@ -179,13 +146,7 @@ async fn handle_200(
     }
 }
 
-async fn handle_301(
-    conf: OAuth2Conf,
-    application_name: String,
-    private_key: String,
-    domain: String,
-    resp: reqwest::Response,
-) -> Result<Response, GithubErr> {
+async fn handle_301(resp: reqwest::Response) -> Result<String, GithubErr> {
     debug!("Redirect detected.");
     let redirect_uri = resp
         .headers()
@@ -222,75 +183,7 @@ async fn handle_301(
         http_code: 500,
         message: String::from("Cannot find access_token element in response body."),
     })?;
-    let user_email_to_send = get_user_email(String::from(token), conf.get_user_email_url).await?;
-    let cookie_to_send = build_cookie(
-        String::from(token),
-        application_name,
-        user_email_to_send.clone(),
-        private_key,
-        domain,
-    )?;
-    let successful_resp: Response = build_succesful_response(cookie_to_send, user_email_to_send);
-    Ok(successful_resp)
-}
-
-#[derive(Serialize, Deserialize)]
-struct UserClaims {
-    user: String,
-    auth_provider: String,
-    token: String,
-}
-
-#[derive(Debug)]
-struct GithubErr {
-    message: String,
-    http_code: u16,
-}
-
-impl fmt::Display for GithubErr {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "meh...")
-    }
-}
-
-impl std::error::Error for GithubErr {}
-
-fn build_cookie(
-    token: String,
-    application_name: String,
-    user: String,
-    private_key: String,
-    domain: String,
-) -> Result<String, GithubErr> {
-    let pkey = RS384KeyPair::from_pem(private_key.as_str()).unwrap();
-    let unsigned_claims = Claims::with_custom_claims(
-        UserClaims {
-            user: user,
-            auth_provider: String::from("github"),
-            token: token,
-        },
-        Duration::from_hours(1),
-    );
-    let signed_claims = pkey.sign(unsigned_claims).map_err(|error| GithubErr {
-        http_code: 500,
-        message: format!("error while signing claims. Original error was: {}", error),
-    })?;
-    info!("building cookie: {}, {}", application_name, signed_claims);
-    //let cookie = Cookie::build((
-    //    application_name.as_str(),
-    //    format!("{}={}", application_name, signed_claims).to_string(),
-    //))
-    //.domain(domain)
-    //.path("/")
-    //.secure(true)
-    //.http_only(true)
-    //.max_age(cookie::time::Duration::days(1))
-    //.build();
-    let cookie_as_string = format!(
-        "{}={}; Domain={}; Path=/; Secure; HttpOnly; Max-Age={}",
-        application_name, signed_claims, domain, 86400
-    );
-    return Ok(cookie_as_string);
+    Ok(token.to_string())
 }
 
 async fn get_user_email(token: String, get_user_email_url: String) -> Result<String, GithubErr> {
@@ -343,39 +236,4 @@ async fn get_user_email(token: String, get_user_email_url: String) -> Result<Str
             http_code: 500,
         }),
     }
-}
-
-fn build_succesful_response(cookie_value: String, user_email: String) -> Response {
-    info!(
-        "building response with user_email: {}, cookie: {}",
-        user_email, cookie_value
-    );
-    return (
-        StatusCode::OK,
-        [
-            (header::SET_COOKIE, cookie_value),
-            (header::CONTENT_TYPE, "application/json".to_string()),
-        ],
-        Json(json!({
-          "user_email": user_email
-        })),
-    )
-        .into_response();
-}
-
-fn build_error_response(error: GithubErr) -> Response {
-    #[derive(Serialize, Deserialize)]
-    struct ErrorResponsePayload {
-        error: String,
-    }
-
-    let error_msg_as_json = ErrorResponsePayload {
-        error: error.message,
-    };
-    return (
-        StatusCode::from_u16(error.http_code).unwrap(),
-        [(header::CONTENT_TYPE, "application/json".to_string())],
-        Json(serde_json::to_value(error_msg_as_json).unwrap()),
-    )
-        .into_response();
 }

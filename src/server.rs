@@ -1,6 +1,6 @@
 use axum::{
     extract::{Path, Query, State},
-    http::header::{AUTHORIZATION, CONTENT_TYPE, COOKIE},
+    http::header::{AUTHORIZATION, CONTENT_TYPE, COOKIE, SET_COOKIE},
     http::{HeaderMap, StatusCode},
     response::{IntoResponse, Response},
     routing::get,
@@ -13,6 +13,11 @@ use serde_json::{json, Value};
 use std::fs;
 use std::net::SocketAddr;
 use tokio::net::TcpListener;
+
+use jwt_simple::algorithms::RSAKeyPairLike;
+use jwt_simple::claims::Claims;
+use jwt_simple::prelude::Duration;
+use jwt_simple::prelude::RS384KeyPair;
 
 use crate::github;
 use crate::verify;
@@ -97,14 +102,76 @@ pub async fn callback(
     let oauth2_config: Value =
         serde_json::from_str(server_config.oauth2_conf.as_str()).expect("Invalid configuration.");
     let oauth2_config_provider = oauth2_config[id_provider.as_str()].clone();
-    github::request_token(
-        oauth2_config_provider,
-        params.code,
-        server_config.application_name,
-        server_config.private_key,
-        server_config.domain,
-    )
-    .await
+    match github::request_token(oauth2_config_provider, params.code).await {
+        Ok(mut claims) => {
+            info!(
+                "Got token and user to send back: {}, {}",
+                claims.token, claims.user
+            );
+            claims.auth_provider = id_provider;
+            let cookie_value = build_cookie(
+                claims.token,
+                server_config.application_name,
+                claims.user.clone(),
+                claims.auth_provider,
+                server_config.private_key,
+                server_config.domain,
+            )
+            .unwrap();
+            build_succesful_response(cookie_value, claims.user).into_response()
+        }
+        Err(err) => axum::http::StatusCode::INTERNAL_SERVER_ERROR.into_response(),
+    }
+}
+
+fn build_cookie(
+    token: String,
+    application_name: String,
+    user: String,
+    auth_provider: String,
+    private_key: String,
+    domain: String,
+) -> Result<String, GithubErr> {
+    let pkey = RS384KeyPair::from_pem(private_key.as_str()).unwrap();
+    let unsigned_claims = Claims::with_custom_claims(
+        UserClaims {
+            user: user,
+            auth_provider: auth_provider,
+            token: token,
+        },
+        Duration::from_hours(1),
+    );
+    let signed_claims = pkey.sign(unsigned_claims).map_err(|error| GithubErr {
+        http_code: 500,
+        message: format!("error while signing claims. Original error was: {}", error),
+    })?;
+    info!("building cookie: {}, {}", application_name, signed_claims);
+    let cookie_as_string = format!(
+        "{}={}; Domain={}; Path=/; Secure; HttpOnly; Max-Age={}",
+        application_name, signed_claims, domain, 86400
+    );
+    return Ok(cookie_as_string);
+}
+
+#[derive(Debug)]
+pub struct GithubErr {
+    pub message: String,
+    pub http_code: u16,
+}
+
+impl fmt::Display for GithubErr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "meh...")
+    }
+}
+
+impl std::error::Error for GithubErr {}
+
+#[derive(Serialize, Deserialize)]
+pub struct UserClaims {
+    pub user: String,
+    pub auth_provider: String,
+    pub token: String,
 }
 
 #[derive(Debug)]
@@ -177,4 +244,39 @@ async fn handle_verify(
         )
             .into_response(),
     }
+}
+
+fn build_succesful_response(cookie_value: String, user_email: String) -> Response {
+    info!(
+        "building response with user_email: {}, cookie: {}",
+        user_email, cookie_value
+    );
+    return (
+        StatusCode::OK,
+        [
+            (SET_COOKIE, cookie_value),
+            (CONTENT_TYPE, "application/json".to_string()),
+        ],
+        Json(json!({
+          "user_email": user_email
+        })),
+    )
+        .into_response();
+}
+
+fn build_error_response(error: GithubErr) -> Response {
+    #[derive(Serialize, Deserialize)]
+    struct ErrorResponsePayload {
+        error: String,
+    }
+
+    let error_msg_as_json = ErrorResponsePayload {
+        error: error.message,
+    };
+    return (
+        StatusCode::from_u16(error.http_code).unwrap(),
+        [(CONTENT_TYPE, "application/json".to_string())],
+        Json(serde_json::to_value(error_msg_as_json).unwrap()),
+    )
+        .into_response();
 }

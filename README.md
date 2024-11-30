@@ -131,3 +131,10 @@ I realize following things:
 - cookie I build are naive,
 - cookie building should not stay into idp file, the github.rs, but stay in server. What is in github.rs should only care about picking token and related username/email,
 - cookie I build is NOT secure and NOT httponly. How's that possible?
+
+## 20241127
+I left this log behind. I implement the 'verify' function, I also decide it is time to move functions from github and verify mods; these mods should follow SRP so just respectively do provide token and validate a token.
+
+Moving accessory functions outside the two mods and into server mod. The verify mod is already clean, let's go for github.
+
+Changing opinion again about errors... Enums aren't cool..
