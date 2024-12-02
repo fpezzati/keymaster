@@ -8,7 +8,6 @@ use axum::{
     routing::get,
     Json, Router,
 };
-use core::fmt;
 use log::{error, info};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
@@ -90,6 +89,25 @@ async fn hello(State(server): State<ServerConfig>) -> impl IntoResponse {
     (StatusCode::OK, Json(String::from(&server.oauth2_conf)))
 }
 
+#[derive(Debug)]
+pub struct ServerError {
+    pub http_code: u16,
+    pub message: String,
+}
+
+impl std::fmt::Display for ServerError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}. Error: {}", self.http_code, self.message)
+    }
+}
+
+#[derive(Serialize, Deserialize, Clone)]
+pub struct UserClaims {
+    pub user: String,
+    pub auth_provider: String,
+    pub token: String,
+}
+
 #[derive(serde::Serialize, serde::Deserialize)]
 pub struct CallbackAuthParams {
     code: String,
@@ -153,10 +171,10 @@ fn build_cookie(
     application_name: String,
     private_key: String,
     domain: String,
-) -> Result<String, GithubErr> {
+) -> Result<String, ServerError> {
     let pkey = RS384KeyPair::from_pem(private_key.as_str()).unwrap();
     let unsigned_claims = Claims::with_custom_claims(claims_to_sign, Duration::from_hours(1));
-    let signed_claims = pkey.sign(unsigned_claims).map_err(|error| GithubErr {
+    let signed_claims = pkey.sign(unsigned_claims).map_err(|error| ServerError {
         http_code: 500,
         message: format!("error while signing claims. Original error was: {}", error),
     })?;
@@ -166,42 +184,6 @@ fn build_cookie(
         application_name, signed_claims, domain, 86400
     );
     return Ok(cookie_as_string);
-}
-
-#[derive(Debug)]
-pub enum ServerError {
-    VerifyError,
-    RequireTokenError,
-}
-
-#[derive(Debug)]
-pub struct GithubErr {
-    pub message: String,
-    pub http_code: u16,
-}
-
-impl fmt::Display for GithubErr {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "meh...")
-    }
-}
-
-impl std::error::Error for GithubErr {}
-
-#[derive(Serialize, Deserialize, Clone)]
-pub struct UserClaims {
-    pub user: String,
-    pub auth_provider: String,
-    pub token: String,
-}
-
-impl fmt::Display for ServerError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            ServerError::VerifyError => write!(f, "VERIFY-ERROR"),
-            ServerError::RequireTokenError => write!(f, "REQUIRE-TOKEN-ERROR"),
-        }
-    }
 }
 
 async fn handle_verify(
