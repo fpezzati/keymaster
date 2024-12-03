@@ -143,3 +143,7 @@ Changing opinion again about errors... Enums aren't cool..
 Rearranged functions in module with proper responsibility.
 
 Still struggling with error management.
+
+## 20241202
+I give up with maybe useful but overcomplicated error management, I probably oversimplify it by collapsing everything in a single struct: ServerError.
+I came to this because I was having three/four error structs looking exactly the same, so..
